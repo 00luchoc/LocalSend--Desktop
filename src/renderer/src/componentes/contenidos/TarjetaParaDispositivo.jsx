@@ -1,7 +1,7 @@
 export function TarjetaParaDispositivo({ alias, direccionIp, tipo, alHacerClic }) {
   return (
-    <article 
-      className="tarjeta-dispositivo" 
+    <article
+      className="tarjeta-dispositivo"
       onClick={() => alHacerClic(direccionIp)}
       style={{ cursor: 'pointer' }}
     >

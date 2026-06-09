@@ -1,19 +1,71 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import dgram from 'dgram'
-import { PUERTO_DESCUBRIMIENTO_UDP, ALIAS_POR_DEFECTO, TIPO_DISPOSITIVO } from './constantes'
+import {
+  PUERTO_OFICIAL,
+  DIRECCION_BROADCAST,
+  ALIAS_POR_DEFECTO,
+  TIPO_DISPOSITIVO,
+  LIMITE_INACTIVIDAD_MS,
+  INTERVALO_LIMPIEZA_MS
+} from './constantes'
 
 let ventanaPrincipal
 let esServidorUdpActivo = false
 const servidorUdp = dgram.createSocket('udp4')
+const dispositivosDetectados = new Map()
 
-function notificarEstadoALaInterfaz() {
+function sincronizarDispositivos() {
   if (ventanaPrincipal && !ventanaPrincipal.isDestroyed()) {
-    ventanaPrincipal.webContents.send('notificar-estado-servidor', esServidorUdpActivo)
+    const listaParaEnviar = Array.from(dispositivosDetectados.values()).map(item => item.datos)
+    ventanaPrincipal.webContents.send('actualizar-lista-dispositivos', listaParaEnviar)
   }
 }
 
-function crearVentanaPrincipal() {
+function iniciarServidores() {
+  try {
+    servidorUdp.on('message', (mensaje, info) => {
+      try {
+        const datos = JSON.parse(mensaje.toString())
+        if (datos.alias !== ALIAS_POR_DEFECTO) {
+          dispositivosDetectados.set(info.address, {
+            datos: { ...datos, direccionIp: info.address },
+            ultimaVezVisto: Date.now()
+          })
+          sincronizarDispositivos()
+        }
+      } catch (error) { /* Paquete inválido ignorado */ }
+    })
+
+    servidorUdp.bind(PUERTO_OFICIAL, () => {
+      servidorUdp.setBroadcast(true)
+      esServidorUdpActivo = true
+      
+      setInterval(() => {
+        const mensaje = JSON.stringify({ alias: ALIAS_POR_DEFECTO, tipo: TIPO_DISPOSITIVO, puerto: PUERTO_OFICIAL })
+        if (esServidorUdpActivo) servidorUdp.send(mensaje, PUERTO_OFICIAL, DIRECCION_BROADCAST)
+      }, 5000)
+
+      setInterval(() => {
+        const ahora = Date.now()
+        let huboCambios = false
+        for (const [ip, info] of dispositivosDetectados.entries()) {
+          if (ahora - info.ultimaVezVisto > LIMITE_INACTIVIDAD_MS) {
+            dispositivosDetectados.delete(ip)
+            huboCambios = true
+          }
+        }
+        if (huboCambios) sincronizarDispositivos()
+      }, INTERVALO_LIMPIEZA_MS)
+    })
+  } catch (error) {
+    esServidorUdpActivo = false
+  }
+}
+
+ipcMain.handle('obtener-estado-servidor', () => esServidorUdpActivo)
+
+app.whenReady().then(() => {
   ventanaPrincipal = new BrowserWindow({
     width: 900,
     height: 670,
@@ -32,44 +84,10 @@ function crearVentanaPrincipal() {
   } else {
     ventanaPrincipal.loadFile(join(__dirname, '../renderer/index.html'))
   }
-}
-
-function iniciarServidorDeDescubrimiento() {
-  try {
-    servidorUdp.on('message', (mensaje, info) => {
-      try {
-        const datos = JSON.parse(mensaje.toString())
-        if (ventanaPrincipal && datos.alias !== ALIAS_POR_DEFECTO) {
-          ventanaPrincipal.webContents.send('dispositivo-encontrado', {
-            ...datos,
-            direccionIp: info.address
-          })
-        }
-      } catch (error) {
-        // Se ignora el error en el parseo de paquetes externos para evitar colapsos
-      }
-    })
-
-    servidorUdp.bind(PUERTO_DESCUBRIMIENTO_UDP, () => {
-      servidorUdp.setBroadcast(true)
-      esServidorUdpActivo = true
-      notificarEstadoALaInterfaz()
-    })
-  } catch (error) {
-    esServidorUdpActivo = false
-  }
-}
-
-ipcMain.handle('obtener-estado-servidor', () => esServidorUdpActivo)
-
-app.whenReady().then(() => {
-  crearVentanaPrincipal()
-  iniciarServidorDeDescubrimiento()
+  iniciarServidores()
 })
 
 app.on('window-all-closed', () => {
-  servidorUdp.close()
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  try { servidorUdp.close() } catch (e) {}
+  if (process.platform !== 'darwin') app.quit()
 })

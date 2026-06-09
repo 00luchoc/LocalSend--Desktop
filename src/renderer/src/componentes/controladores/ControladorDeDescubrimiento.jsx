@@ -1,17 +1,34 @@
 import { useState, useEffect } from 'react'
 import { ContenedorDeListaDeDispositivos } from '../contenedores/ContenedorDeListaDeDispositivos'
 
-export function ControladorDeDescubrimiento() {
-  const [dispositivosEncontrados, setDispositivosEncontrados] = useState([])
+export function ControladorDeDescubrimiento({ archivosParaEnviar }) {
+  const [dispositivosEnRed, setDispositivosEnRed] = useState([])
 
   useEffect(() => {
-    window.apiExterna.alEncontrarDispositivo((nuevoDispositivo) => {
-      setDispositivosEncontrados((prev) => {
-        const existe = prev.some(d => d.direccionIp === nuevoDispositivo.direccionIp)
-        return existe ? prev : [...prev, nuevoDispositivo]
-      })
+    window.apiExterna.alActualizarListaDispositivos((listaActualizada) => {
+      setDispositivosEnRed(listaActualizada)
     })
   }, [])
 
-  return <ContenedorDeListaDeDispositivos listaDeDispositivos={dispositivosEncontrados} />
+  const manejarSeleccionDeDestino = (direccionIp) => {
+    if (archivosParaEnviar.length === 0) {
+      alert('Primero selecciona archivos para enviar')
+      return
+    }
+
+    const archivosFormateados = archivosParaEnviar.map(f => ({
+      nombre: f.name,
+      ruta: f.path,
+      tamanio: f.size
+    }))
+
+    window.apiExterna.enviarArchivosADispositivo(direccionIp, archivosFormateados)
+  }
+
+  return (
+    <ContenedorDeListaDeDispositivos 
+      listaDeDispositivos={dispositivosEnRed} 
+      alSeleccionarDispositivo={manejarSeleccionDeDestino}
+    />
+  )
 }
