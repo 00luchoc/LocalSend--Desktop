@@ -1,52 +1,32 @@
 import { useState } from 'react'
-import { TarjetaDeArchivoSeleccionado } from '../contenidos/TarjetaDeArchivoSeleccionado'
 
 export function ControladorDeArchivos({ archivos, alCambiarArchivos }) {
-  const [esArrastrando, setEsArrastrando] = useState(false)
+  const [esArrastrando, setEsArrastrando] = useState(false);
 
-  const manejarDrop = (evento) => {
-    evento.preventDefault()
-    setEsArrastrando(false)
-    
-    const archivosCapturados = Array.from(evento.dataTransfer.files)
-    
-    // MAPEADO SEGURO: Convertimos el archivo a un objeto simple con su ruta real
-    const procesados = archivosCapturados.map(archivo => ({
-      name: archivo.name,
-      size: archivo.size,
-      path: window.apiExterna.obtenerRutaReal(archivo), // <--- SOLUCIÓN AL ERROR
-      type: archivo.type || 'Archivo'
-    }))
-
-    alCambiarArchivos([...archivos, ...procesados])
-  }
-
-  const eliminarArchivo = (nombre) => {
-    alCambiarArchivos(archivos.filter(a => a.name !== nombre))
-  }
+  const manejarDrop = (e) => {
+    e.preventDefault(); setEsArrastrando(false);
+    const nuevos = Array.from(e.dataTransfer.files).map(f => ({
+      name: f.name, size: f.size, path: window.apiExterna.obtenerRutaReal(f)
+    }));
+    alCambiarArchivos([...archivos, ...nuevos]);
+  };
 
   return (
-    <div className="seccion-envio-archivos">
-      <div 
-        className={`drop-zone ${esArrastrando ? 'activo' : ''}`}
+    <div className="seccion-archivos">
+      <div className={`drop-zone ${esArrastrando ? 'activo' : ''}`}
         onDragOver={(e) => { e.preventDefault(); setEsArrastrando(true) }}
         onDragLeave={() => setEsArrastrando(false)}
-        onDrop={manejarDrop}
-      >
-        <span style={{ fontSize: '40px' }}>📁</span>
-        <p>{esArrastrando ? '¡Suéltalo!' : 'Arrastra archivos aquí para enviar'}</p>
+        onDrop={manejarDrop}>
+        <p>Arrastra archivos o haz clic aquí</p>
       </div>
-
-      <div className="lista-archivos-seleccionados" style={{ marginTop: '20px' }}>
-        {archivos.map((archivo) => (
-          <TarjetaDeArchivoSeleccionado 
-            key={archivo.name}
-            nombre={archivo.name}
-            tamaño={archivo.size}
-            alEliminar={() => eliminarArchivo(archivo.name)}
-          />
+      <div className="lista-stack">
+        {archivos.map(a => (
+          <div key={a.name} className="tarjeta-archivo">
+            <span>{a.name}</span>
+            <button className="boton-eliminar" onClick={() => alCambiarArchivos(archivos.filter(i => i.name !== a.name))}>✕</button>
+          </div>
         ))}
       </div>
     </div>
-  )
+  );
 }
