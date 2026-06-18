@@ -4,24 +4,37 @@ import { ControladorDeDescubrimiento } from './componentes/controladores/Control
 import { ControladorDeArchivos } from './componentes/controladores/ControladorDeArchivos'
 
 function App() {
-  const [archivos, setArchivos] = useState([])
+  const [aliasPropio, setAliasPropio] = useState('Cargando...')
+  const [archivosSeleccionados, setArchivosSeleccionados] = useState([])
 
-  if (!window.apiExterna) {
-    return <div style={{ padding: '20px', color: 'red' }}>Error crítico: Puente de comunicación no disponible.</div>
-  }
+  useEffect(() => {
+    // Obtenemos nuestra identidad única al arrancar
+    window.apiExterna.obtenerAliasLocal().then(setAliasPropio)
+    
+    window.apiExterna.alActualizarAlias((nuevoAlias) => {
+      setAliasPropio(nuevoAlias)
+    })
+  }, [])
+
+  if (!window.apiExterna) return <div>Error de Puente Seguro</div>
 
   return (
     <main className="aplicacion-principal">
-      <header className="cabecera-principal">
-        <h1>LocalSend</h1>
+      <header className="cabecera-principal" style={{ display: 'flex', justifyContent: 'space-between', padding: '20px' }}>
+        <div>
+          <h1>LocalSend</h1>
+          <p>Tu alias: <strong>{aliasPropio}</strong></p>
+        </div>
         <ControladorDeConectividad />
       </header>
+      
       <div className="layout-principal">
         <section className="seccion-envio">
-          <ControladorDeArchivos alCambiarArchivos={setArchivos} />
+          <ControladorDeArchivos alCambiarArchivos={setArchivosSeleccionados} />
         </section>
+
         <aside className="seccion-descubrimiento">
-          <ControladorDeDescubrimiento archivosParaEnviar={archivos} />
+          <ControladorDeDescubrimiento archivosParaEnviar={archivosSeleccionados} />
         </aside>
       </div>
     </main>

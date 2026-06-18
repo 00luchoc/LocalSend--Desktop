@@ -26,8 +26,8 @@ export function ControladorDeDescubrimiento({ archivosParaEnviar }) {
   }
 
   return (
-    <ContenedorDeListaDeDispositivos 
-      listaDeDispositivos={dispositivosEnRed} 
+    <ContenedorDeListaDeDispositivos
+      listaDeDispositivos={dispositivosEnRed}
       alSeleccionarDispositivo={manejarSeleccionDeDestino}
     />
   )
