@@ -1,21 +1,25 @@
-import { TarjetaParaDispositivo } from '../contenidos/TarjetaParaDispositivo'
+import { TarjetaDeDispositivo } from '../contenidos/TarjetaDeDispositivo'
 
-export function ContenedorDeListaDeDispositivos({ listaDeDispositivos }) {
-  return (  
+export function ContenedorDeListaDeDispositivos({ listaDeDispositivos, alSeleccionar }) {
+  if (listaDeDispositivos.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '20px', color: '#b2bec3' }}>
+        <p>Buscando dispositivos en la red local...</p>
+      </div>
+    )
+  }
+
+  return (
     <section className="lista-dispositivos">
-      <h3>Dispositivos Cercanos</h3>
-      {listaDeDispositivos.length === 0 ? (
-        <p>Buscando dispositivos en la red...</p>
-      ) : (
-        listaDeDispositivos.map((disp) => (
-          <TarjetaParaDispositivo
-            key={disp.direccionIp}
-            alias={disp.alias}
-            direccionIp={disp.direccionIp}
-            tipo={disp.tipo}
-          />
-        ))
-      )}
+      {listaDeDispositivos.map((dispositivo) => (
+        <TarjetaDeDispositivo
+          key={dispositivo.direccionIp}
+          alias={dispositivo.alias}
+          direccionIp={dispositivo.direccionIp}
+          tipo={dispositivo.tipo}
+          alHacerClick={alSeleccionar}
+        />
+      ))}
     </section>
   )
 }

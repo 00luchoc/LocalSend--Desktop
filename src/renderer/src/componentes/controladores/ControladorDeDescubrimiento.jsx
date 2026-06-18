@@ -5,30 +5,29 @@ export function ControladorDeDescubrimiento({ archivosParaEnviar }) {
   const [dispositivosEnRed, setDispositivosEnRed] = useState([])
 
   useEffect(() => {
+    // Escuchamos la actualización constante del Main (Discovery UDP)
     window.apiExterna.alActualizarListaDispositivos((listaActualizada) => {
       setDispositivosEnRed(listaActualizada)
     })
   }, [])
 
-  const manejarSeleccionDeDestino = (direccionIp) => {
+  const manejarEnvio = (direccionIpDestino) => {
     if (archivosParaEnviar.length === 0) {
-      alert('Primero selecciona archivos para enviar')
+      alert('Por favor, primero arrastra los archivos que deseas enviar.')
       return
     }
 
-    const archivosFormateados = archivosParaEnviar.map(f => ({
-      nombre: f.name,
-      ruta: f.path,
-      tamanio: f.size
-    }))
-
-    window.apiExterna.enviarArchivosADispositivo(direccionIp, archivosFormateados)
+    // Disparamos la lógica de negociación por WebSockets en el Main
+    window.apiExterna.enviarArchivosADispositivo(direccionIpDestino, archivosParaEnviar)
   }
 
   return (
-    <ContenedorDeListaDeDispositivos
-      listaDeDispositivos={dispositivosEnRed}
-      alSeleccionarDispositivo={manejarSeleccionDeDestino}
-    />
+    <div className="panel-descubrimiento">
+      <h3>Dispositivos cercanos</h3>
+      <ContenedorDeListaDeDispositivos 
+        listaDeDispositivos={dispositivosEnRed} 
+        alSeleccionar={manejarEnvio}
+      />
+    </div>
   )
 }

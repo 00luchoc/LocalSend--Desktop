@@ -9,5 +9,9 @@ contextBridge.exposeInMainWorld('apiExterna', {
   alRecibirPeticionTransferencia: (callback) => 
     ipcRenderer.on('notificar-peticion-entrada', (_e, metadatos) => callback(metadatos)),
   alRecibirCambioDeEstado: (callback) => 
-    ipcRenderer.on('notificar-estado-servidor', (_e, estado) => callback(estado))
+    ipcRenderer.on('notificar-estado-servidor', (_e, estado) => callback(estado)),
+   enviarArchivosADispositivo: (direccionIp, archivos) => 
+    ipcRenderer.send('iniciar-envio-archivos', { direccionIp, archivos }),
+  alRecibirProgreso: (callback) => 
+    ipcRenderer.on('progreso-transferencia', (_e, datos) => callback(datos))
 })
