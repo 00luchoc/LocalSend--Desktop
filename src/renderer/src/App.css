@@ -1,5 +1,5 @@
 :root {
-  /* Tema Claro (Predeterminado) */
+  /* Paleta Tema Claro (Predeterminado) */
   --bg-principal: #ffffff;
   --bg-secundario: #f8f9fa;
   --color-texto: #2d3436;
@@ -8,19 +8,20 @@
   --color-borde: #e9ecef;
   --color-exito: #2ecc71;
   --color-error: #ff7675;
-  --sombra: 0 10px 30px rgba(0, 0, 0, 0.05);
+  --sombra-suave: 0 4px 12px rgba(0, 0, 0, 0.05);
+  --sombra-emergente: 0 12px 40px rgba(0, 0, 0, 0.12);
   --transicion: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Tema Oscuro Automático */
+    /* Paleta Tema Oscuro (Automático por SO) */
     --bg-principal: #1a1a1a;
-    --bg-secundario: #2d2d2d;
+    --bg-secundario: #262626;
     --color-texto: #f1f2f6;
     --color-texto-muted: #a4b0be;
-    --color-borde: #3d3d3d;
-    --sombra: 0 10px 30px rgba(0, 0, 0, 0.3);
+    --color-borde: #333333;
+    --sombra-emergente: 0 12px 40px rgba(0, 0, 0, 0.3);
   }
 }
 
@@ -28,10 +29,11 @@
 
 body {
   margin: 0;
-  font-family: 'Inter', -apple-system, sans-serif;
+  padding: 0;
+  font-family: 'Inter', -apple-system, system-ui, sans-serif;
   background-color: var(--bg-principal);
   color: var(--color-texto);
-  overflow: hidden;
+  overflow: hidden; /* Evita scroll doble en la ventana principal [1] */
   transition: background-color 0.4s ease;
 }
 
@@ -39,6 +41,13 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+}
+
+.layout-principal {
+  display: grid;
+  grid-template-columns: 1fr 340px; /* Separación área de envío y radar [2] */
+  flex: 1;
+  overflow: hidden;
 }
 
 .cabecera-app {
@@ -59,8 +68,10 @@ body {
 
 .identidad h1 {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: 1.25rem;
+  font-weight: 800;
   color: var(--color-acento);
+  letter-spacing: -0.5px;
 }
 
 .badge-alias {
@@ -68,7 +79,7 @@ body {
   color: var(--color-texto-muted);
 }
 
-/* Indicador de Conectividad (Requisito de UI) */
+/* Indicador de Disponibilidad (Requisito de UI [2]) */
 .indicador-conectividad {
   display: flex;
   align-items: center;
@@ -83,35 +94,32 @@ body {
   width: 10px;
   height: 10px;
   border-radius: 50%;
+  transition: var(--transicion);
 }
 
 .led-verde { 
   background-color: var(--color-exito); 
-  box-shadow: 0 0 10px rgba(46, 204, 113, 0.4); 
+  box-shadow: 0 0 10px rgba(46, 204, 113, 0.5); 
 }
 
 .led-rojo { 
   background-color: var(--color-error); 
-  box-shadow: 0 0 10px rgba(255, 118, 117, 0.4); 
-}
-
-.layout-principal {
-  display: grid;
-  grid-template-columns: 1fr 340px;
-  flex: 1;
+  box-shadow: 0 0 10px rgba(255, 118, 117, 0.5); 
 }
 
 .area-envio {
   padding: 30px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-/* Zona de Drop Activa */
 .drop-zone {
   border: 2px dashed var(--color-borde);
-  border-radius: 20px;
+  border-radius: 24px;
   background: var(--bg-secundario);
-  padding: 50px;
+  padding: 60px 40px;
   text-align: center;
   transition: var(--transicion);
   cursor: pointer;
@@ -120,34 +128,38 @@ body {
 .drop-zone.activo {
   border-color: var(--color-acento);
   background: rgba(0, 166, 147, 0.05);
-  transform: scale(1.01);
+  transform: scale(1.01); /* Hover effect visual [2] */
 }
 
-/* Lista de Archivos */
+/* Tarjeta de Archivo (Metadata) */
 .tarjeta-archivo {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   background: var(--bg-principal);
-  padding: 12px 18px;
-  margin-top: 10px;
-  border-radius: 12px;
+  padding: 15px;
+  border-radius: 16px;
   border: 1px solid var(--color-borde);
-  animation: aparecer 0.3s ease-out;
+  gap: 15px;
+  box-shadow: var(--sombra-suave);
+  animation: aparecer 0.3s ease-out forwards;
 }
+
+.info-archivo { flex: 1; }
+.info-archivo .nombre { display: block; font-weight: 600; font-size: 0.95rem; }
+.metadatos { font-size: 0.8rem; color: var(--color-texto-muted); margin-top: 4px; }
 
 .panel-dispositivos {
   background: var(--bg-secundario);
   border-left: 1px solid var(--color-borde);
-  padding: 20px;
+  padding: 25px;
   overflow-y: auto;
 }
 
 .tarjeta-dispositivo {
   background: var(--bg-principal);
   border: 1px solid var(--color-borde);
-  border-radius: 14px;
-  padding: 15px;
+  border-radius: 16px;
+  padding: 16px;
   margin-bottom: 12px;
   display: flex;
   align-items: center;
@@ -159,24 +171,46 @@ body {
 .tarjeta-dispositivo:hover {
   border-color: var(--color-acento);
   transform: translateX(-5px);
+  box-shadow: var(--sombra-suave);
 }
 
-.modal-solicitud-entrada, .modal-exito {
+/* Toast Emergente Superior (Cerrable) */
+.notificacion-emergente {
   position: fixed;
-  top: 50%;
+  top: 20px;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
+  background: var(--bg-principal);
+  border: 1px solid var(--color-borde);
+  border-radius: 16px;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  box-shadow: var(--sombra-emergente);
+  z-index: 2000;
+  min-width: 320px;
+  animation: slideDown 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+
+/* Modal de Solicitud (Negociación) */
+.overlay-bloqueante {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.4); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center; z-index: 1500;
+}
+
+.modal-solicitud-entrada {
   background: var(--bg-principal);
   padding: 30px;
   border-radius: 24px;
-  box-shadow: var(--sombra);
-  z-index: 1000;
+  box-shadow: var(--sombra-emergente);
   text-align: center;
   border: 1px solid var(--color-borde);
   min-width: 300px;
-  animation: aparecer 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
+/* Toasts de Estado de Envío */
 .toast-negociacion {
   position: fixed;
   bottom: 30px;
@@ -184,33 +218,19 @@ body {
   transform: translateX(-50%);
   background: var(--color-texto);
   color: var(--bg-principal);
-  padding: 12px 24px;
+  padding: 12px 25px;
   border-radius: 50px;
   font-size: 0.9rem;
   z-index: 500;
+  box-shadow: 0 5px 20px rgba(0,0,0,0.2);
 }
 
-@keyframes aparecer {
-  from { opacity: 0; transform: translate(-50%, -40%); }
-  to { opacity: 1; transform: translate(-50%, -50%); }
-}
+.boton-primario { background: var(--color-acento); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+.boton-secundario { background: transparent; color: var(--color-error); border: 1px solid var(--color-error); padding: 10px 20px; border-radius: 8px; cursor: pointer; }
 
-/* Botones Clean */
-.boton-primario {
-  background: var(--color-acento);
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-}
+@keyframes aparecer { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideDown { from { opacity: 0; transform: translate(-50%, -40px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
-.boton-secundario {
-  background: transparent;
-  color: var(--color-error);
-  border: 1px solid var(--color-error);
-  padding: 10px 20px;
-  border-radius: 8px;
-  cursor: pointer;
-}
+/* Iconos SVG */
+.icono-svg { fill: var(--color-texto-muted); transition: var(--transicion); }
+.activo .icono-svg { fill: var(--color-acento); }

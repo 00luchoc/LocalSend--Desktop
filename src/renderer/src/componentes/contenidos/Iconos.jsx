@@ -10,6 +10,13 @@ export const IconoCarpeta = () => (
   </svg>
 );
 
+// ESTA ES LA EXPORTACIÓN QUE TE FALTABA
+export const IconoCheck = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-exito)' }}>
+    <polyline points="20 6 9 17 4 12"></polyline>
+  </svg>
+);
+
 export const IconoDispositivo = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>

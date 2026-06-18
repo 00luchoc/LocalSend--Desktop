@@ -15,5 +15,5 @@ if (process.contextIsolated) {
       alRecibirProgreso: (callback) => ipcRenderer.on('progreso-transferencia', (_e, d) => callback(d)),
       enviarArchivosADispositivo: (direccionIp, archivos) => ipcRenderer.send('iniciar-envio-archivos', { direccionIp, archivos })
     });
-  } catch (e) { console.error('Fallo en Preload') }
+  } catch (e) { console.error('Fallo en Preload:', e) }
 }
