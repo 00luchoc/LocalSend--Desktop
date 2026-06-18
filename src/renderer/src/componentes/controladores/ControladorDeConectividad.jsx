@@ -1,18 +1,24 @@
 import { useState, useEffect } from 'react'
-import { IndicadorDeEstadoDeRed } from '../contenidos/IndicadorDeEstadoDeRed'
 
 export function ControladorDeConectividad() {
-  const [estaServidorEnLinea, setEstaServidorEnLinea] = useState(false)
+  const [esServidorActivo, setEsServidorActivo] = useState(false)
 
   useEffect(() => {
-    // Consulta inicial del estado
-    window.apiExterna.solicitarEstadoDelServidor().then(setEstaServidorEnLinea)
+    // Consultamos el estado inicial
+    window.apiExterna.solicitarEstadoDelServidor().then(setEsServidorActivo)
 
-    // Suscripción a cambios en tiempo real
+    // Escuchamos cambios en tiempo real del servidor UDP/TCP
     window.apiExterna.alRecibirCambioDeEstado((nuevoEstado) => {
-      setEstaServidorEnLinea(nuevoEstado)
+      setEsServidorActivo(nuevoEstado)
     })
   }, [])
 
-  return <IndicadorDeEstadoDeRed esActivo={estaServidorEnLinea} />
+  return (
+    <div className="indicador-conexion">
+      <div className={`led ${esServidorActivo ? 'led-verde' : 'led-rojo'}`}></div>
+      <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>
+        {esServidorActivo ? 'SERVIDOR ACTIVO' : 'RECONECTANDO...'}
+      </span>
+    </div>
+  )
 }

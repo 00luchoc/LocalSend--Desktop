@@ -1,0 +1,142 @@
+:root {
+  --color-primario: #00a693;
+  --color-fondo: #f8f9fa;
+  --color-texto: #2d3436;
+  --color-borde: #e9ecef;
+  --sombra-suave: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: var(--color-fondo);
+  color: var(--color-texto);
+}
+
+.layout-principal {
+  display: grid;
+  grid-template-columns: 1fr 350px;
+  height: 100vh;
+}
+
+/* Zona de Arrastre (Drop Zone) */
+.drop-zone {
+  border: 2px dashed var(--color-borde);
+  border-radius: 20px;
+  background: white;
+  margin: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  min-height: 250px;
+}
+
+.drop-zone.activo {
+  border-color: var(--color-primario);
+  background-color: rgba(0, 166, 147, 0.05);
+  transform: scale(1.01);
+}
+
+/* Lista de Dispositivos */
+.panel-dispositivos {
+  background: white;
+  border-left: 1px solid var(--color-borde);
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.tarjeta-dispositivo {
+  background: white;
+  border: 1px solid var(--color-borde);
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tarjeta-dispositivo:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--sombra-suave);
+  border-color: var(--color-primario);
+}
+
+.icono-circular {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  background: #f1f2f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.cabecera-app {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 30px;
+  background: white;
+  border-bottom: 1px solid var(--color-borde);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.cabecera-app h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  color: var(--color-primario);
+  letter-spacing: -0.5px;
+}
+
+.badge-alias {
+  font-size: 0.85rem;
+  color: #636e72;
+  margin-top: 2px;
+}
+
+.badge-alias span {
+  color: var(--color-texto);
+  font-weight: 600;
+  background: #f1f2f6;
+  padding: 2px 8px;
+  border-radius: 6px;
+  margin-left: 5px;
+}
+
+/* Estilos para el LED de Conectividad */
+.indicador-conexion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f8f9fa;
+  padding: 8px 15px;
+  border-radius: 50px;
+  border: 1px solid var(--color-borde);
+}
+
+.led {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(0,0,0,0.1);
+}
+
+.led-verde { background-color: #2ecc71; box-shadow: 0 0 10px rgba(46, 204, 113, 0.4); }
+.led-rojo { background-color: #e74c3c; box-shadow: 0 0 10px rgba(231, 76, 60, 0.4); }
+
+.monitor-flotante {
+  margin-top: 20px;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}

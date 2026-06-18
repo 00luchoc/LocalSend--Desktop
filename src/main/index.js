@@ -6,29 +6,29 @@ import express from 'express'
 import { WebSocketServer, WebSocket } from 'ws'
 import fs from 'fs'
 import os from 'os'
-import { 
-  PUERTO_OFICIAL, 
-  DIRECCION_BROADCAST,
-  LIMITE_INACTIVIDAD_MS, 
-  INTERVALO_LIMPIEZA_MS,
-  ACCION_NEGOCIAR 
-} from './constantes'
 
-// --- Variables de Estado Global (Proceso Main) ---
+// --- CONSTANTES TÉCNICAS (Evitando Números Mágicos) --- [7]
+const PUERTO_OFICIAL = 53317
+const DIRECCION_BROADCAST = '255.255.255.255'
+const LIMITE_INACTIVIDAD_MS = 12000
+const INTERVALO_LIMPIEZA_MS = 5000
+const ACCION_NEGOCIAR = 'SOLICITAR_TRANSFERENCIA'
+
+// --- ESTADO GLOBAL DEL PROCESO MAIN ---
 let ventanaPrincipal
 let aliasLocal = ''
 let esServidorActivo = false
 const servidorUdp = dgram.createSocket('udp4')
 const dispositivosDetectados = new Map()
 
-// --- Configuración del Servidor Dual (Express + WebSockets) ---
+// --- CONFIGURACIÓN DEL SERVIDOR DUAL (Express + WebSockets) --- [1]
 const appExpress = express()
 const servidorHttp = http.createServer(appExpress)
 const servidorWs = new WebSocketServer({ server: servidorHttp })
 
 /**
- * Gestiona la identidad única del dispositivo persistiendo el alias en disco.
- * Cumple con el requisito de Persistencia de Configuración [8].
+ * Gestiona la identidad persistente del dispositivo. [2]
+ * Genera un alias amigable (Adjetivo + Nombre) si no existe. [8]
  */
 function obtenerAliasUnico() {
   const rutaAjustes = join(app.getPath('userData'), 'ajustes.json')
@@ -37,7 +37,7 @@ function obtenerAliasUnico() {
       return JSON.parse(fs.readFileSync(rutaAjustes)).alias
     }
   } catch (error) {
-    console.error('Error al leer ajustes persistidos:', error.message)
+    console.error('Error al leer ajustes:', error.message)
   }
 
   const adjetivos = ['Veloz', 'Alegre', 'Valiente', 'Calmo', 'Brillante']
@@ -46,34 +46,32 @@ function obtenerAliasUnico() {
   
   try {
     fs.writeFileSync(rutaAjustes, JSON.stringify({ alias: nuevoAlias }))
-  } catch (error) {
-    console.error('No se pudo guardar el alias único:', error.message)
-  }
+  } catch (e) { /* Error de escritura silencioso */ }
   return nuevoAlias
 }
 
 /**
- * Obtiene las direcciones IP locales para evitar el auto-descubrimiento [9].
+ * Obtiene las IPs locales para filtrar el autodescubrimiento.
  */
 function obtenerMisDireccionesIp() {
   return Object.values(os.networkInterfaces())
     .flat()
-    .filter(interfaz => interfaz.family === 'IPv4' && !interfaz.internal)
-    .map(interfaz => interfaz.address)
+    .filter(it => it.family === 'IPv4' && !it.internal)
+    .map(it => it.address)
 }
 
 /**
- * Envía la lista actualizada de dispositivos al proceso Renderer [10].
+ * Notifica al proceso Renderer la lista actualizada de dispositivos. [9]
  */
-function sincronizarInterfazConDispositivos() {
+function sincronizarInterfaz() {
   if (ventanaPrincipal && !ventanaPrincipal.isDestroyed()) {
-    const listaParaEnviar = Array.from(dispositivosDetectados.values()).map(item => item.datos)
-    ventanaPrincipal.webContents.send('actualizar-lista-dispositivos', listaParaEnviar)
+    const lista = Array.from(dispositivosDetectados.values()).map(d => d.datos)
+    ventanaPrincipal.webContents.send('actualizar-lista-dispositivos', lista)
   }
 }
 
 /**
- * SERVIDOR (Receptor): Maneja la recepción de archivos mediante Streams No Bloqueantes [8].
+ * SERVIDOR RECEPTOR: Maneja la entrada de archivos mediante Streams. [2, 3]
  */
 function iniciarServidorDeNegociacion() {
   servidorWs.on('connection', (socket) => {
@@ -84,7 +82,7 @@ function iniciarServidorDeNegociacion() {
         if (!esBinario) {
           const mensaje = JSON.parse(datos.toString())
           if (mensaje.accion === ACCION_NEGOCIAR) {
-            // Se prepara la escritura en la carpeta de Descargas del sistema [11]
+            // Se guardará en la carpeta de Descargas por defecto [2]
             const rutaDestino = join(app.getPath('downloads'), mensaje.metadatos.nombre)
             flujoEscritura = fs.createWriteStream(rutaDestino)
             
@@ -96,51 +94,42 @@ function iniciarServidorDeNegociacion() {
             })
           }
         } else if (flujoEscritura) {
-          // Escritura directa de chunks binarios al sistema de archivos [12]
-          flujoEscritura.write(datos)
+          flujoEscritura.write(datos) // Escritura directa en disco
         }
-      } catch (error) {
-        console.error('Fallo en la recepción del mensaje:', error.message)
-      }
+      } catch (e) { console.error('Error en recepción:', e.message) }
     })
 
-    socket.on('close', () => {
-      if (flujoEscritura) flujoEscritura.end()
-    })
+    socket.on('close', () => { if (flujoEscritura) flujoEscritura.end() })
   })
 
-  // Escuchamos en todas las interfaces (0.0.0.0) en el puerto oficial 53317 [13]
   servidorHttp.listen(PUERTO_OFICIAL, '0.0.0.0', () => {
     esServidorActivo = true
-    // Notificamos al indicador LED de la interfaz que el servidor está OK [10]
-    if (ventanaPrincipal && !ventanaPrincipal.isDestroyed()) {
-      ventanaPrincipal.webContents.send('notificar-estado-servidor', true)
-    }
+    if (ventanaPrincipal) ventanaPrincipal.webContents.send('notificar-estado-servidor', true)
   })
 }
 
 /**
- * CLIENTE (Emisor): Gestiona el envío de archivos hacia otro dispositivo [12].
+ * CLIENTE EMISOR: Envía archivos al destino mediante Streams no bloqueantes. [2, 3]
  */
 ipcMain.on('iniciar-envio-archivos', (_evento, { direccionIp, archivos }) => {
   archivos.forEach((archivo) => {
-    // Cláusula de guarda para evitar el error de ruta indefinida (Solución a screenshot) [4]
+    // CLÁUSULA DE GUARDA: Evita el error de ruta undefined [6]
     if (!archivo.path) {
-      console.error(`Ruta inválida para el archivo: ${archivo.name}`)
-      return
+      console.error(`ERROR: No se recibió ruta para ${archivo.name}.`)
+      return 
     }
 
     const socketCliente = new WebSocket(`ws://${direccionIp}:${PUERTO_OFICIAL}`)
     const tiempoInicio = Date.now()
 
     socketCliente.on('open', () => {
-      // 1. Fase de Negociación: Enviamos metadatos del archivo
+      // 1. Negociación de metadatos [3]
       socketCliente.send(JSON.stringify({
         accion: ACCION_NEGOCIAR,
         metadatos: { nombre: archivo.name, tamaño: archivo.size }
       }))
 
-      // 2. Fase de Transferencia: Leemos el archivo en chunks con Streams [12]
+      // 2. Transferencia fluida (Streams) [3]
       const flujoLectura = fs.createReadStream(archivo.path)
       let bytesEnviadosTotal = 0
 
@@ -148,49 +137,43 @@ ipcMain.on('iniciar-envio-archivos', (_evento, { direccionIp, archivos }) => {
         bytesEnviadosTotal += chunk.length
         socketCliente.send(chunk)
 
-        // 3. Reporte de métricas en tiempo real para el Monitor de UI [10]
-        const duracionActual = (Date.now() - tiempoInicio) / 1000
-        const velocidadMBs = (bytesEnviadosTotal / (1024 * 1024) / duracionActual).toFixed(2)
+        // 3. Reporte de progreso real [9]
+        const duracion = (Date.now() - tiempoInicio) / 1000
+        const velocidad = (bytesEnviadosTotal / (1024 * 1024) / duracion).toFixed(2)
         
         ventanaPrincipal.webContents.send('progreso-transferencia', {
           nombre: archivo.name,
           porcentaje: ((bytesEnviadosTotal / archivo.size) * 100).toFixed(2),
-          velocidad: velocidadMBs,
-          tiempoRestante: Math.ceil((archivo.size - bytesEnviadosTotal) / (bytesEnviadosTotal / duracionActual))
+          velocidad: velocidad
         })
       })
 
       flujoLectura.on('end', () => socketCliente.close())
     })
-
-    socketCliente.on('error', (err) => console.error('Error de conexión con el destino:', err.message))
   })
 })
 
 /**
- * Descubrimiento UDP: Envía y recibe latidos (beacons) en la red local [9].
+ * DESCUBRIMIENTO UDP: Envía y recibe latidos (beacons) en la red local. [1, 10]
  */
 function iniciarDescubrimientoUdp() {
-  servidorUdp.on('message', (mensaje, infoRemota) => {
+  servidorUdp.on('message', (msg, info) => {
     try {
-      const datosDelVecino = JSON.parse(mensaje.toString())
-      const misIps = obtenerMisDireccionesIp()
-
-      // Filtramos para no agregarnos a nosotros mismos en la lista
-      if (!misIps.includes(infoRemota.address)) {
-        dispositivosDetectados.set(infoRemota.address, {
-          datos: { ...datosDelVecino, direccionIp: infoRemota.address },
+      const datos = JSON.parse(msg.toString())
+      if (!obtenerMisDireccionesIp().includes(info.address)) {
+        dispositivosDetectados.set(info.address, {
+          datos: { ...datos, direccionIp: info.address },
           ultimaVezVisto: Date.now()
         })
-        sincronizarInterfazConDispositivos()
+        sincronizarInterfaz()
       }
-    } catch (e) { /* Paquete de red inválido ignorado */ }
+    } catch (e) { /* Paquete inválido */ }
   })
 
   servidorUdp.bind(PUERTO_OFICIAL, '0.0.0.0', () => {
     servidorUdp.setBroadcast(true)
     
-    // Latido constante cada 5 segundos
+    // Latidos de descubrimiento cada 5 segundos [10]
     setInterval(() => {
       if (esServidorActivo) {
         const beacon = JSON.stringify({ alias: aliasLocal, tipo: 'Computadora', puerto: PUERTO_OFICIAL })
@@ -198,23 +181,22 @@ function iniciarDescubrimientoUdp() {
       }
     }, 5000)
 
-    // Limpieza automática de dispositivos inactivos [9]
+    // Limpieza de dispositivos inactivos (TTL)
     setInterval(() => {
       const ahora = Date.now()
-      let huboCambios = false
-      for (const [ip, dispositivo] of dispositivosDetectados.entries()) {
-        if (ahora - dispositivo.ultimaVezVisto > LIMITE_INACTIVIDAD_MS) {
-          dispositivosDetectados.delete(ip)
-          huboCambios = true
+      let huboCambio = false
+      for (const [ip, d] of dispositivosDetectados.entries()) {
+        if (ahora - d.ultimaVezVisto > LIMITE_INACTIVIDAD_MS) {
+          dispositivosDetectados.delete(ip); huboCambio = true
         }
       }
-      if (huboCambios) sincronizarInterfazConDispositivos()
+      if (huboCambio) sincronizarInterfaz()
     }, INTERVALO_LIMPIEZA_MS)
   })
 }
 
 /**
- * Configuración y creación de la ventana de la aplicación [3].
+ * Inicialización de la Ventana Principal. [1]
  */
 function crearVentana() {
   ventanaPrincipal = new BrowserWindow({
@@ -224,7 +206,8 @@ function crearVentana() {
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false // Permite el acceso a la propiedad .path en los archivos arrastrados
+      sandbox: false, // CRÍTICO: Permite acceder a la propiedad .path en el Renderer [1]
+      contextIsolation: true
     }
   })
 
@@ -240,7 +223,7 @@ function crearVentana() {
   }
 }
 
-// --- Ciclo de Vida de la Aplicación ---
+// --- CICLO DE VIDA DE LA APP ---
 app.whenReady().then(() => {
   aliasLocal = obtenerAliasUnico()
   crearVentana()
@@ -248,7 +231,7 @@ app.whenReady().then(() => {
   iniciarDescubrimientoUdp()
 })
 
-// Handlers de comunicación para obtener estados iniciales
+// Handlers IPC para comunicación con el Puente Seguro (Preload) [1]
 ipcMain.handle('obtener-estado-servidor', () => esServidorActivo)
 ipcMain.handle('obtener-alias-local', () => aliasLocal)
 
@@ -256,6 +239,6 @@ app.on('window-all-closed', () => {
   try {
     servidorUdp.close()
     servidorHttp.close()
-  } catch (error) { /* Ya cerrados */ }
+  } catch (e) { /* Ya cerrados */ }
   if (process.platform !== 'darwin') app.quit()
 })
