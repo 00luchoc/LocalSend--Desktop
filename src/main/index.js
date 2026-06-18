@@ -3,7 +3,7 @@ import { join } from 'path'
 import dgram from 'dgram'
 import http from 'http'
 import express from 'express'
-import { WebSocketServer } from 'ws'
+import { WebSocketServer, WebSocket } from 'ws'
 import fs from 'fs'
 import os from 'os'
 import { 
@@ -20,7 +20,7 @@ let esServidorActivo = false
 const servidorUdp = dgram.createSocket('udp4')
 const dispositivosDetectados = new Map()
 
-// Configuración del Servidor Dual (Express + WebSockets) según propuesta docente
+// Configuración del Servidor Dual (Express + WebSockets)
 const appExpress = express()
 const servidorHttp = http.createServer(appExpress)
 const servidorWs = new WebSocketServer({ server: servidorHttp })
@@ -29,172 +29,170 @@ function obtenerAliasUnico() {
   const rutaAjustes = join(app.getPath('userData'), 'ajustes.json')
   try {
     if (fs.existsSync(rutaAjustes)) {
-      const datos = JSON.parse(fs.readFileSync(rutaAjustes))
-      return datos.alias
+      return JSON.parse(fs.readFileSync(rutaAjustes)).alias
     }
-  } catch (error) {
-    console.error('Error al leer ajustes, generando alias nuevo')
-  }
+  } catch (error) { console.error('Error al leer ajustes') }
 
   const adjetivos = ['Veloz', 'Alegre', 'Valiente', 'Calmo', 'Brillante']
   const nombres = ['Naranja', 'Halcon', 'Bosque', 'Rayo', 'Oceano']
   const nuevoAlias = `${adjetivos[Math.floor(Math.random() * adjetivos.length)]} ${nombres[Math.floor(Math.random() * nombres.length)]}`
   
-  try {
-    fs.writeFileSync(rutaAjustes, JSON.stringify({ alias: nuevoAlias }))
-  } catch (error) {
-    console.error('No se pudo persistir el alias')
-  }
+  try { fs.writeFileSync(rutaAjustes, JSON.stringify({ alias: nuevoAlias })) } catch (e) {}
   return nuevoAlias
 }
 
 function obtenerMisDireccionesIp() {
   return Object.values(os.networkInterfaces())
     .flat()
-    .filter(interfaz => interfaz.family === 'IPv4' && !interfaz.internal)
-    .map(interfaz => interfaz.address)
+    .filter(it => it.family === 'IPv4' && !it.internal)
+    .map(it => it.address)
 }
 
-function sincronizarInterfazConDispositivos() {
+function sincronizarInterfaz() {
   if (ventanaPrincipal && !ventanaPrincipal.isDestroyed()) {
-    const listaParaEnviar = Array.from(dispositivosDetectados.values()).map(item => item.datos)
-    ventanaPrincipal.webContents.send('actualizar-lista-dispositivos', listaParaEnviar)
+    const lista = Array.from(dispositivosDetectados.values()).map(item => item.datos)
+    ventanaPrincipal.webContents.send('actualizar-lista-dispositivos', lista)
   }
 }
 
+// --- LOGICA DE RECEPCIÓN (SERVIDOR) ---
 function iniciarServidorDeNegociacion() {
   servidorWs.on('connection', (socket) => {
-    socket.on('message', (bufferDeDatos) => {
+    let flujoEscritura = null
+    let nombreArchivo = ''
+
+    socket.on('message', (datos, esBinario) => {
       try {
-        const mensaje = JSON.parse(bufferDeDatos.toString())
-        if (mensaje.accion === ACCION_NEGOCIAR && ventanaPrincipal) {
-          // Notifica al Renderer para mostrar el modal de Aceptar/Rechazar
-          ventanaPrincipal.webContents.send('notificar-peticion-entrada', mensaje.metadatos)
+        if (!esBinario) {
+          const mensaje = JSON.parse(datos.toString())
+          if (mensaje.accion === ACCION_NEGOCIAR) {
+            nombreArchivo = mensaje.metadatos.nombre
+            // Notificamos al receptor para mostrar el monitor [6]
+            ventanaPrincipal.webContents.send('progreso-transferencia', {
+              nombre: nombreArchivo,
+              porcentaje: 0,
+              velocidad: "0.00",
+              esRecepcion: true
+            })
+            
+            // Preparamos el archivo en Descargas [4, 5]
+            const rutaDestino = join(app.getPath('downloads'), nombreArchivo)
+            flujoEscritura = fs.createWriteStream(rutaDestino)
+          }
+        } else if (flujoEscritura) {
+          // Si es binario, lo escribimos directamente al disco (Stream) [4, 7]
+          flujoEscritura.write(datos)
         }
-      } catch (error) {
-        console.error('Error en el protocolo de negociación WS')
-      }
+      } catch (error) { console.error('Error en recepción:', error.message) }
+    });
+
+    socket.on('close', () => {
+      if (flujoEscritura) flujoEscritura.end()
     })
   })
 
-  servidorHttp.on('error', (errorDeRed) => {
-    console.error('Fallo crítico en Servidor de Negociación:', errorDeRed.message)
-    esServidorActivo = false
-  })
-
-  // Escuchamos en todas las interfaces para permitir conexión desde otros dispositivos
   servidorHttp.listen(PUERTO_OFICIAL, '0.0.0.0', () => {
     esServidorActivo = true
-    console.log(`Servidor Express/WS activo en puerto ${PUERTO_OFICIAL}`)
   })
 }
 
-function iniciarDescubrimientoUdp() {
-  servidorUdp.on('message', (mensajeRecibido, infoRemota) => {
-    try {
-      const datosDelDispositivo = JSON.parse(mensajeRecibido.toString())
-      const misIps = obtenerMisDireccionesIp()
+// --- LOGICA DE ENVÍO (CLIENTE) ---
+ipcMain.on('iniciar-envio-archivos', (_evento, { direccionIp, archivos }) => {
+  archivos.forEach((archivo) => {
+    // Establecemos conexión WebSocket con el destino [1, 7]
+    const socketCliente = new WebSocket(`ws://${direccionIp}:${PUERTO_OFICIAL}`)
+    const tiempoInicio = Date.now()
 
-      // Filtro de IP para evitar el auto-descubrimiento
-      if (!misIps.includes(infoRemota.address)) {
-        dispositivosDetectados.set(infoRemota.address, {
-          datos: { ...datosDelDispositivo, direccionIp: infoRemota.address },
+    socketCliente.on('open', () => {
+      // 1. Enviamos metadatos para negociar [7]
+      socketCliente.send(JSON.stringify({
+        accion: ACCION_NEGOCIAR,
+        metadatos: { nombre: archivo.name, tamaño: archivo.size }
+      }))
+
+      // 2. Iniciamos el Stream de lectura (No bloqueante) [4, 7]
+      const flujoLectura = fs.createReadStream(archivo.path)
+      let bytesEnviados = 0
+
+      flujoLectura.on('data', (fragmento) => {
+        bytesEnviados += fragmento.length
+        socketCliente.send(fragmento) // Enviamos binario
+
+        // 3. Reportamos progreso real al Monitor de UI [6]
+        const duracion = (Date.now() - tiempoInicio) / 1000
+        const velocidad = (bytesEnviados / (1024 * 1024) / duracion).toFixed(2)
+        
+        ventanaPrincipal.webContents.send('progreso-transferencia', {
+          nombre: archivo.name,
+          porcentaje: ((bytesEnviados / archivo.size) * 100).toFixed(2),
+          velocidad: velocidad,
+          tiempoRestante: Math.ceil((archivo.size - bytesEnviados) / (bytesEnviados / duracion))
+        })
+      })
+
+      flujoLectura.on('end', () => socketCliente.close())
+    })
+  })
+})
+
+function iniciarDescubrimientoUdp() {
+  servidorUdp.on('message', (msg, info) => {
+    try {
+      const datos = JSON.parse(msg.toString())
+      if (!obtenerMisDireccionesIp().includes(info.address)) {
+        dispositivosDetectados.set(info.address, {
+          datos: { ...datos, direccionIp: info.address },
           ultimaVezVisto: Date.now()
         })
-        sincronizarInterfazConDispositivos()
+        sincronizarInterfaz()
       }
-    } catch (error) {
-      /* Beacon inválido o corrupto ignorado */
-    }
+    } catch (e) {}
   })
 
   servidorUdp.bind(PUERTO_OFICIAL, '0.0.0.0', () => {
     servidorUdp.setBroadcast(true)
-    
-    // Latidos (Beacons) para que otros nos encuentren
     setInterval(() => {
       if (esServidorActivo) {
-        const beacon = JSON.stringify({ 
-          alias: aliasLocal, 
-          tipo: 'Computadora', 
-          puerto: PUERTO_OFICIAL 
-        })
+        const beacon = JSON.stringify({ alias: aliasLocal, tipo: 'Computadora', puerto: PUERTO_OFICIAL })
         servidorUdp.send(beacon, PUERTO_OFICIAL, DIRECCION_BROADCAST)
       }
     }, 5000)
-
-    // Limpieza de dispositivos inactivos (TTL)
+    
     setInterval(() => {
       const ahora = Date.now()
-      let huboCambios = false
-      for (const [ip, info] of dispositivosDetectados.entries()) {
-        if (ahora - info.ultimaVezVisto > LIMITE_INACTIVIDAD_MS) {
+      let cambio = false
+      for (const [ip, d] of dispositivosDetectados.entries()) {
+        if (ahora - d.ultimaVezVisto > LIMITE_INACTIVIDAD_MS) {
           dispositivosDetectados.delete(ip)
-          huboCambios = true
+          cambio = true
         }
       }
-      if (huboCambios) sincronizarInterfazConDispositivos()
+      if (cambio) sincronizarInterfaz()
     }, INTERVALO_LIMPIEZA_MS)
   })
 }
 
-function crearVentanaPrincipal() {
+app.whenReady().then(() => {
+  aliasLocal = obtenerAliasUnico()
   ventanaPrincipal = new BrowserWindow({
-    width: 900,
-    height: 670,
-    show: false,
-    autoHideMenuBar: true,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
-    }
+    width: 900, height: 670, show: false, autoHideMenuBar: true,
+    webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false }
   })
-
   ventanaPrincipal.on('ready-to-show', () => {
     ventanaPrincipal.show()
     ventanaPrincipal.webContents.send('configurar-alias-local', aliasLocal)
   })
+  if (process.env.ELECTRON_RENDERER_URL) ventanaPrincipal.loadURL(process.env.ELECTRON_RENDERER_URL)
+  else ventanaPrincipal.loadFile(join(__dirname, '../renderer/index.html'))
 
-  if (process.env.ELECTRON_RENDERER_URL) {
-    ventanaPrincipal.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    ventanaPrincipal.loadFile(join(__dirname, '../renderer/index.html'))
-  }
-}
-
-app.whenReady().then(() => {
-  // Inicialización de identidad y servicios
-  aliasLocal = obtenerAliasUnico()
-  crearVentanaPrincipal()
   iniciarServidorDeNegociacion()
   iniciarDescubrimientoUdp()
 })
 
-// Handlers para el puente seguro (Preload)
 ipcMain.handle('obtener-estado-servidor', () => esServidorActivo)
 ipcMain.handle('obtener-alias-local', () => aliasLocal)
 
-ipcMain.on('iniciar-envio-archivos', (_evento, { direccionIp, archivos }) => {
-  archivos.forEach((archivo) => {
-    // Aquí se dispara el flujo de transferencia TCP/Streams hacia el destino
-    console.log(`Iniciando transferencia de ${archivo.name} hacia ${direccionIp}`)
-    
-    // Notificación inicial de progreso a la interfaz
-    ventanaPrincipal.webContents.send('progreso-transferencia', {
-      nombre: archivo.name,
-      porcentaje: 0,
-      velocidad: "0.00",
-      tiempoRestante: "Calculando..."
-    })
-  })
-})
-
 app.on('window-all-closed', () => {
-  try {
-    servidorUdp.close()
-    servidorHttp.close()
-  } catch (error) {
-    /* Ya cerrado */
-  }
+  try { servidorUdp.close(); servidorHttp.close() } catch (e) {}
   if (process.platform !== 'darwin') app.quit()
 })
