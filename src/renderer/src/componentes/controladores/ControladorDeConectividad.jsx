@@ -4,20 +4,22 @@ export function ControladorDeConectividad() {
   const [esServidorActivo, setEsServidorActivo] = useState(false)
 
   useEffect(() => {
-    // Consultamos el estado inicial
-    window.apiExterna.solicitarEstadoDelServidor().then(setEsServidorActivo)
-
-    // Escuchamos cambios en tiempo real del servidor UDP/TCP
-    window.apiExterna.alRecibirCambioDeEstado((nuevoEstado) => {
-      setEsServidorActivo(nuevoEstado)
-    })
+    // Verificamos el estado inicial al arrancar
+    if (window.apiExterna) {
+      window.apiExterna.solicitarEstadoDelServidor().then(setEsServidorActivo)
+      
+      // Escuchamos actualizaciones en tiempo real (LED Verde/Rojo)
+      window.apiExterna.alRecibirCambioDeEstado((estado) => {
+        setEsServidorActivo(estado)
+      })
+    }
   }, [])
 
   return (
-    <div className="indicador-conexion">
+    <div className="indicador-conectividad">
       <div className={`led ${esServidorActivo ? 'led-verde' : 'led-rojo'}`}></div>
-      <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>
-        {esServidorActivo ? 'SERVIDOR ACTIVO' : 'RECONECTANDO...'}
+      <span className="texto-estado">
+        {esServidorActivo ? 'CONECTADO' : 'DESCONECTADO'}
       </span>
     </div>
   )
